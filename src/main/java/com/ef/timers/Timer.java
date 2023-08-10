@@ -16,7 +16,8 @@ import javax.jms.Session;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.util.Pool;
 
 public class Timer implements MessageListener, ExceptionListener {
     private static final Logger logger = LoggerFactory.getLogger(Timer.class);
@@ -25,7 +26,7 @@ public class Timer implements MessageListener, ExceptionListener {
     private final DelayedMessageProducer delayedMessageProducer;
     private ExpiryHandler expiryHandler;
 
-    public Timer(JedisPool jedisPool, Connection connection, String queue) throws JMSException {
+    public Timer(Pool<Jedis> jedisPool, Connection connection, String queue) throws JMSException {
         this.repository = new TimerEntityRepository(jedisPool, queue + "-timer");
         this.delayedMessageProducer = new DelayedMessageProducer(connection, queue);
 
