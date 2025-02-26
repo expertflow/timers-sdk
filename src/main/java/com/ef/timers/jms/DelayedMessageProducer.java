@@ -1,5 +1,6 @@
 package com.ef.timers.jms;
 
+import com.ef.timers.common.Constants;
 import com.ef.timers.model.TimerEntity;
 import com.ef.timers.model.TimerMessage;
 import com.ef.timers.model.TimerType;
@@ -12,6 +13,7 @@ import jakarta.jms.Session;
 import org.apache.activemq.ScheduledMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 /**
  * The type Activemq publisher.
@@ -36,6 +38,7 @@ public class DelayedMessageProducer {
     public void produce(TimerType type, Object data, TimerEntity timerEntity) throws JMSException {
         ObjectMessage message = this.session.createObjectMessage();
         message.setJMSType(timerEntity.getId());
+        message.setStringProperty(Constants.TENANT_ID, MDC.get(Constants.TENANT_ID));
         message.setObject(new TimerMessage(timerEntity.getDelayedMessageId(), type, data));
         message.setLongProperty(ScheduledMessage.AMQ_SCHEDULED_DELAY, timerEntity.getDelay() * 1000);
 

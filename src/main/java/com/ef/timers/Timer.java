@@ -1,5 +1,6 @@
 package com.ef.timers;
 
+import com.ef.timers.common.Constants;
 import com.ef.timers.jms.DelayedMessageProducer;
 import com.ef.timers.model.TimerEntity;
 import com.ef.timers.model.TimerMessage;
@@ -16,6 +17,7 @@ import jakarta.jms.Session;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.util.Pool;
 
@@ -77,6 +79,7 @@ public class Timer implements MessageListener, ExceptionListener {
     @Override
     public void onMessage(Message message) {
         try {
+            MDC.put(Constants.TENANT_ID, message.getStringProperty(Constants.TENANT_ID));
             String timerId = message.getJMSType();
             TimerMessage timerMessage = (TimerMessage) ((ObjectMessage) message).getObject();
 
@@ -105,6 +108,7 @@ public class Timer implements MessageListener, ExceptionListener {
     }
 
     private String getJsonKey(String id, TimerType type) {
-        return type.name() + "-" + id;
+        String tenantId = MDC.get(Constants.TENANT_ID);
+        return tenantId + ":" + type.name() + "-" + id;
     }
 }

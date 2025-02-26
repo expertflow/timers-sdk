@@ -1,5 +1,8 @@
 package com.ef.timers.redis;
 
+import com.ef.timers.common.Constants;
+import org.slf4j.MDC;
+
 import java.lang.reflect.ParameterizedType;
 
 /**
@@ -93,6 +96,7 @@ public class RedisJsonDao<T> {
      * @return the key
      */
     private String getKey(String id) {
-        return this.type + ":" + id;
+        String tenantId = MDC.get(Constants.TENANT_ID);
+        return tenantId + ":" + this.type + ":" + id;
     }
 }

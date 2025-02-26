@@ -1,5 +1,6 @@
 package com.ef.timers.redis;
 
+import com.ef.timers.common.Constants;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.slf4j.MDC;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
 import redis.clients.jedis.commands.ProtocolCommand;
@@ -90,8 +92,9 @@ public class RedisClientImpl implements RedisClient {
     public boolean setJsonWithSet(String type, String id, Object object) {
         Transaction transaction = null;
         try (Jedis conn = getConnection()) {
+            String tenantIdKey = MDC.get(Constants.TENANT_ID) + ":";
             transaction = conn.multi();
-            transaction.sadd(type, id);
+            transaction.sadd(tenantIdKey + type, id);
             String value = objectMapper.writeValueAsString(object);
             transaction.sendCommand(Command.SET, SafeEncoder.encodeMany(getKey(type, id), JSON_ROOT_PATH, value));
             transaction.exec();
