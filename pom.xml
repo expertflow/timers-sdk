@@ -6,7 +6,7 @@
 	<groupId>io.github.expertflow</groupId>
 	<artifactId>timers-sdk</artifactId>
 	<packaging>jar</packaging>
-	<version>0.0.8-v1-SNAPSHOT</version>
+	<version>0.0.8-v2-SNAPSHOT</version>
 	<name>timers-sdk</name>
 	<url>https://github.com/expertflow/timers-sdk</url>
 	<description>Sdk to run stateless timers in the HC-4 services</description>
