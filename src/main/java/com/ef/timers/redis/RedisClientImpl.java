@@ -11,7 +11,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Value;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.Pipeline;
 import redis.clients.jedis.Transaction;
 import redis.clients.jedis.commands.ProtocolCommand;
 import redis.clients.jedis.params.ScanParams;
@@ -35,6 +37,9 @@ public class RedisClientImpl implements RedisClient {
      * The Jedis pool.
      */
     private final Pool<Jedis> jedisPool;
+
+    @Value("${azure.connections.enable:false}")
+    private boolean enableAzure;
 
 
     /**
@@ -90,6 +95,11 @@ public class RedisClientImpl implements RedisClient {
 
     @Override
     public boolean setJsonWithSet(String type, String id, Object object) {
+
+        if (enableAzure) {
+            return setJsonWithSetViaPipeline(type, id, object);
+        }
+
         Transaction transaction = null;
         try (Jedis conn = getConnection()) {
             String tenantIdKey = MDC.get(Constants.TENANT_ID) + ":";
@@ -108,16 +118,50 @@ public class RedisClientImpl implements RedisClient {
         return false;
     }
 
+    /**
+     * Sets a JSON object in Redis associated with a specified type and id using a pipeline.
+     * The method adds the id to a Redis set of type identifiers and stores the JSON object
+     * in a key constructed from the type and id. This uses a pipeline to queue commands and
+     * execute them in a single request for performance optimization.
+     *
+     * @param type   The category or type under which the id is stored (e.g., "agentPresence").
+     * @param id     The unique identifier to associate with the JSON object.
+     * @param object The object to store as JSON in Redis.
+     * @return true if the commands execute successfully; false otherwise.
+     */
+    public boolean setJsonWithSetViaPipeline(String type, String id, Object object) {
+        try (Jedis conn = getConnection()) {
+            String tenantIdKey = MDC.get(Constants.TENANT_ID) + ":";
+
+            Pipeline pipeline = conn.pipelined();
+
+            pipeline.sadd(tenantIdKey + type, id);
+            pipeline.sendCommand(Command.SET, encode(getKey(type, id), JSON_ROOT_PATH, object));
+
+            pipeline.sync(); // Execute all queued commands
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+
     @Override
     public boolean setAllJsonForType(String type, List<String> idList, List<Object> objectList) {
+        if (enableAzure) {
+            return setAllJsonForTypeViaPipeline(type, idList, objectList);
+        }
         Transaction transaction = null;
         try (Jedis conn = getConnection()) {
+            String tenantIdKey = MDC.get(Constants.TENANT_ID) + ":";
+
             transaction = conn.multi();
             for (int i = 0; i < idList.size(); i++) {
                 String id = idList.get(i);
                 Object object = objectList.get(i);
 
-                transaction.sadd(type, id);
+                transaction.sadd(tenantIdKey + type, id);
                 String value = objectMapper.writeValueAsString(object);
                 transaction.sendCommand(Command.SET, SafeEncoder.encodeMany(getKey(type, id), JSON_ROOT_PATH, value));
             }
@@ -133,6 +177,42 @@ public class RedisClientImpl implements RedisClient {
     }
 
     /**
+     * Sets multiple JSON objects in Redis associated with a specified type and list of IDs using a pipeline.
+     * This method queues multiple commands for efficient batch processing.
+     * It does not guarantee atomic execution, as pipelines do not support rollback on failure.
+     *
+     * @param type       The category or type under which the IDs are stored (e.g., "agentPresence").
+     * @param idList     A list of unique identifiers associated with each JSON object.
+     * @param objectList A list of objects to store as JSON in Redis, corresponding in size and order with idList.
+     * @return true if all commands execute successfully; false otherwise.
+     */
+    public boolean setAllJsonForTypeViaPipeline(String type, List<String> idList, List<Object> objectList) {
+        try (Jedis conn = getConnection()) {
+            String tenantIdKey = MDC.get(Constants.TENANT_ID) + ":";
+
+            Pipeline pipeline = conn.pipelined();
+            for (int i = 0; i < idList.size(); i++) {
+                String id = idList.get(i);
+                Object object = objectList.get(i);
+
+                // Add SADD command
+                pipeline.sadd(tenantIdKey + type, id);
+
+                // Serialize object to JSON
+//                String jsonData = String.valueOf(RedisJson.encode(getKey(type, id), JSON_ROOT_PATH, object));
+
+                // Add JSON.SET command
+                pipeline.sendCommand(Command.SET, encode(getKey(type, id), JSON_ROOT_PATH, object));
+            }
+            pipeline.sync(); // Send all commands at once
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /**
      * Sets multiple json object along with storing their keys in a set.
      *
      * @param type        the type of the field or the name of the set.
@@ -142,10 +222,11 @@ public class RedisClientImpl implements RedisClient {
     public boolean setMultiJsonWithSet(String type, Map<UUID, Object> jsonObjects) {
         Transaction transaction = null;
         try (Jedis conn = getConnection()) {
+            String tenantIdKey = MDC.get(Constants.TENANT_ID) + ":";
             transaction = conn.multi();
             for (Map.Entry<UUID, Object> entry : jsonObjects.entrySet()) {
                 String id = entry.getKey().toString();
-                transaction.sadd(type, id);
+                transaction.sadd(tenantIdKey + type, id);
                 String value = objectMapper.writeValueAsString(entry.getValue());
                 transaction.sendCommand(Command.SET, SafeEncoder.encodeMany(getKey(type, id), JSON_ROOT_PATH, value));
             }
@@ -224,11 +305,17 @@ public class RedisClientImpl implements RedisClient {
 
     @Override
     public boolean delJsonWithSet(String type, String id) {
+        if (enableAzure) {
+            return delJsonWithSetViaPipeLine(type, id);
+        }
+
         Transaction transaction = null;
         try (Jedis conn = getConnection()) {
+            String tenantIdKey = MDC.get(Constants.TENANT_ID) + ":";
+
             transaction = conn.multi();
             transaction.sendCommand(Command.DEL, SafeEncoder.encodeMany(getKey(type, id), JSON_ROOT_PATH));
-            transaction.srem(type, id);
+            transaction.srem(tenantIdKey + type, id);
             transaction.exec();
             return true;
         } catch (Exception e) {
@@ -240,11 +327,48 @@ public class RedisClientImpl implements RedisClient {
         return false;
     }
 
+    /**
+     * Deletes a JSON object associated with a specified type and ID from Redis using a pipeline.
+     * This method queues commands to delete the JSON entry and remove the ID from the associated set,
+     * allowing for efficient batch processing. Note that pipelines do not provide atomic transactions,
+     * so commands may partially succeed in case of errors.
+     *
+     * @param type The category or type under which the ID is stored (e.g., "agentPresence").
+     * @param id   The unique identifier of the JSON object to delete.
+     * @return true if all commands in the pipeline execute successfully; false otherwise.
+     */
+    public boolean delJsonWithSetViaPipeLine(String type, String id) {
+        try (Jedis conn = getConnection()) {
+            String tenantIdKey = MDC.get(Constants.TENANT_ID) + ":";
+
+            Pipeline pipeline = conn.pipelined();
+
+            // Queue delete command for JSON key
+            pipeline.sendCommand(Command.DEL, SafeEncoder.encodeMany(getKey(type, id), JSON_ROOT_PATH));
+
+            // Queue removal of id from the set
+            pipeline.srem(tenantIdKey + type, id);
+
+            // Execute all queued commands
+            pipeline.sync();
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
     @Override
     public boolean delAllJsonForType(String type) {
+        if (enableAzure) {
+            return delAllJsonForTypeViaPipeLine(type);
+        }
+
         Transaction transaction = null;
         try (Jedis conn = getConnection()) {
-            Set<String> idList = conn.smembers(type);
+            String tenantIdKey = MDC.get(Constants.TENANT_ID) + ":";
+
+            Set<String> idList = conn.smembers(tenantIdKey + type);
             if (idList == null) {
                 return false;
             }
@@ -252,7 +376,7 @@ public class RedisClientImpl implements RedisClient {
             for (String id : idList) {
                 transaction.sendCommand(Command.DEL, SafeEncoder.encodeMany(getKey(type, id), JSON_ROOT_PATH));
             }
-            transaction.del(type);
+            transaction.del(tenantIdKey + type);
             transaction.exec();
             return true;
         } catch (Exception e) {
@@ -263,6 +387,41 @@ public class RedisClientImpl implements RedisClient {
         }
         return false;
     }
+
+    /**
+     * Deletes all JSON objects associated with a specified type in Redis using a pipeline.
+     * This method retrieves all IDs stored under the specified type, queues commands to delete each
+     * associated JSON entry, and removes the main set containing these IDs. Using pipelining allows for
+     * efficient batch processing, though it is not atomic, so partial failures are possible.
+     *
+     * @param type The category or grouping under which the JSON objects are stored (e.g., "agentPresence").
+     * @return true if all commands in the pipeline execute successfully; false otherwise.
+     */
+    public boolean delAllJsonForTypeViaPipeLine(String type) {
+        try (Jedis conn = getConnection()) {
+            String tenantIdKey = MDC.get(Constants.TENANT_ID) + ":";
+            Set<String> idList = conn.smembers(tenantIdKey + type);
+            if (idList == null || idList.isEmpty()) {
+                return false;
+            }
+
+            Pipeline pipeline = conn.pipelined();
+            // Delete the main type
+            pipeline.del(tenantIdKey + type);
+
+            for (String id : idList) {
+                // Send DEL command for each JSON key
+                pipeline.sendCommand(Command.DEL, SafeEncoder.encodeMany(getKey(type, id), JSON_ROOT_PATH));
+            }
+
+            pipeline.sync(); // Execute all commands in the pipeline
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
 
     @Override
     public Long setAdd(String key, String member) {
@@ -340,7 +499,8 @@ public class RedisClientImpl implements RedisClient {
      * @return the key
      */
     private String getKey(String type, String id) {
-        return type + ":" + id;
+        String tenantIdKey = MDC.get(Constants.TENANT_ID);
+        return tenantIdKey + ":" + type + ":" + id;
     }
 
     /**
@@ -384,5 +544,18 @@ public class RedisClientImpl implements RedisClient {
         public byte[] getRaw() {
             return raw;
         }
+    }
+
+    /**
+     * Encode byte [ ] [ ].
+     *
+     * @param key  the key
+     * @param path the path
+     * @param o    the o
+     * @return the byte [ ] [ ]
+     * @throws JsonProcessingException the json processing exception
+     */
+    public static byte[][] encode(String key, String path, Object o) throws JsonProcessingException {
+        return SafeEncoder.encodeMany(key, path, objectMapper.writeValueAsString(o));
     }
 }
