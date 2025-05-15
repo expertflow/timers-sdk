@@ -4,5 +4,6 @@ public enum TimerType {
     AGENT_INACTIVITY,
     CONVERSATION_HOLD,
     CUSTOMER_INACTIVITY,
-    RONA
+    RONA,
+    AGENT_RESERVATION_TTL
 }
