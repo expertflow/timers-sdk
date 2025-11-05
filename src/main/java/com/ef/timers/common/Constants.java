@@ -9,6 +9,6 @@ public final class Constants {
 
     }
 
-    public static final String TENANT_ID = "tenant-id";
+    public static final String TENANT_ID = "tenantid";
 }
 
