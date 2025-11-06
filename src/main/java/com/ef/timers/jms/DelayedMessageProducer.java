@@ -10,7 +10,6 @@ import jakarta.jms.JMSException;
 import jakarta.jms.MessageProducer;
 import jakarta.jms.ObjectMessage;
 import jakarta.jms.Session;
-import org.apache.activemq.ScheduledMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -40,7 +39,7 @@ public class DelayedMessageProducer {
         message.setJMSType(timerEntity.getId());
         message.setStringProperty(Constants.TENANT_ID, MDC.get(Constants.TENANT_ID));
         message.setObject(new TimerMessage(timerEntity.getDelayedMessageId(), type, data));
-        message.setLongProperty(ScheduledMessage.AMQ_SCHEDULED_DELAY, timerEntity.getDelay() * 1000);
+        message.setLongProperty("_AMQ_SCHED_DELIVERY_DELAY", timerEntity.getDelay() * 1000);
 
         this.producer.send(message);
         logger.debug("Timer: {} started with delay: {} | dMessageId: {}",

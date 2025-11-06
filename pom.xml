@@ -6,7 +6,7 @@
 	<groupId>io.github.expertflow</groupId>
 	<artifactId>timers-sdk</artifactId>
 	<packaging>jar</packaging>
-	<version>0.0.10</version>
+	<version>0.0.11</version>
 	<name>timers-sdk</name>
 	<url>https://github.com/expertflow/timers-sdk</url>
 	<description>Sdk to run stateless timers in the HC-4 services</description>
@@ -68,10 +68,10 @@
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
 		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-activemq</artifactId>
-		</dependency>
+        <dependency>
+            <artifactId>spring-boot-starter-artemis</artifactId>
+            <groupId>org.springframework.boot</groupId>
+        </dependency>
 		<dependency>
 			<groupId>redis.clients</groupId>
 			<artifactId>jedis</artifactId>
