@@ -39,7 +39,8 @@ public class DelayedMessageProducer {
         message.setJMSType(timerEntity.getId());
         message.setStringProperty(Constants.TENANT_ID, MDC.get(Constants.TENANT_ID));
         message.setObject(new TimerMessage(timerEntity.getDelayedMessageId(), type, data));
-        message.setLongProperty("_AMQ_SCHED_DELIVERY", timerEntity.getDelay() * 1000);
+        message.setLongProperty("_AMQ_SCHED_DELIVERY",
+                System.currentTimeMillis() + timerEntity.getDelay() * 1000);
 
         this.producer.send(message);
         logger.debug("Timer: {} started with delay: {} | dMessageId: {}",
