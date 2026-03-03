@@ -1,6 +1,6 @@
 package com.ef.timers.redis;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import tools.jackson.core.JacksonException;
 import java.util.List;
 import java.util.Set;
 import redis.clients.jedis.params.ScanParams;
@@ -68,9 +68,9 @@ public interface RedisClient {
      * @param key   the key
      * @param clazz the clazz
      * @return the json array
-     * @throws JsonProcessingException the json processing exception
+     * @throws JacksonException the jackson exception
      */
-    <T> List<T> getJsonArray(String key, Class<T> clazz) throws JsonProcessingException;
+    <T> List<T> getJsonArray(String key, Class<T> clazz) throws JacksonException;
 
     /**
      * Get the list Objects associated with the keys.  If any key does not exist, the special value

@@ -1,9 +1,9 @@
 package com.ef.timers.redis;
 
 import com.ef.timers.common.Constants;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JavaType;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JavaType;
+import tools.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -87,7 +87,7 @@ public class RedisClientImpl implements RedisClient {
             String status = conn.getClient().getStatusCodeReply();
             assertReplyOk(status);
             return true;
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             e.printStackTrace();
         }
         return false;
@@ -250,14 +250,14 @@ public class RedisClientImpl implements RedisClient {
                 assertReplyNotError(response);
                 return objectMapper.readValue(response, clazz);
             }
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             e.printStackTrace();
         }
         return null;
     }
 
     @Override
-    public <T> List<T> getJsonArray(String key, Class<T> clazz) throws JsonProcessingException {
+    public <T> List<T> getJsonArray(String key, Class<T> clazz) throws JacksonException {
         String response;
         try (Jedis conn = getConnection()) {
             conn.getClient().sendCommand(Command.GET, SafeEncoder.encodeMany(key, JSON_ROOT_PATH));
@@ -289,7 +289,7 @@ public class RedisClientImpl implements RedisClient {
                     responseList.add(objectMapper.readValue(object, clazz));
                 }
             }
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             e.printStackTrace();
         }
         return responseList;
@@ -553,9 +553,9 @@ public class RedisClientImpl implements RedisClient {
      * @param path the path
      * @param o    the o
      * @return the byte [ ] [ ]
-     * @throws JsonProcessingException the json processing exception
+     * @throws JacksonException the jackson exception
      */
-    public static byte[][] encode(String key, String path, Object o) throws JsonProcessingException {
+    public static byte[][] encode(String key, String path, Object o) throws JacksonException {
         return SafeEncoder.encodeMany(key, path, objectMapper.writeValueAsString(o));
     }
 }
